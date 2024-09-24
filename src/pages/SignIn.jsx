@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Route, Routes, useNavigate } from 'react-router-dom';
-import {jwtDecode} from 'jwt-decode'; // استخدام jwt-decode
-import './App.css';
+
 
 const apiUrl = 'http://localhost:4000';
 
-function App() {
+function SignIn() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [token, setToken] = useState(localStorage.getItem('token') || '');
-  const [isLoggedIn, setIsLoggedIn] = useState(!!token);
+  const [token, setToken] = useState('');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [message, setMessage] = useState('');
   const navigate = useNavigate();
 
   const register = async () => {
@@ -27,7 +27,7 @@ function App() {
         alert(data);
       } else {
         const data = await response.json();
-        alert('Registration successful!');
+        alert(data);
       }
     } catch (error) {
       alert('An error occurred during registration');
@@ -49,10 +49,8 @@ function App() {
         alert(data);
       } else {
         const data = await response.json();
-        const token = data.token;
-        setToken(token);
-        localStorage.setItem('token', token);
-        setIsLoggedIn(true);
+        setToken(data.split(': ')[1]);
+        setIsLoggedIn(true); // Set login state to true
         navigate('/protected');
       }
     } catch (error) {
@@ -76,16 +74,11 @@ function App() {
 
   const goToAdminDashboard = async () => {
     try {
-      const response = await fetch(`${apiUrl}/admin/dashboard`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}` // إرسال التوكن في الهيدر
-        }
-      });
-
+      const response = await fetch(`${apiUrl}/admin/dashboard?token=${token}`);
       const data = await response.json();
       if (response.ok) {
         localStorage.setItem('users', JSON.stringify(data.users));
+        localStorage.setItem('token', token);
         navigate('/admin');
       } else {
         alert(data.message);
@@ -95,124 +88,81 @@ function App() {
     }
   };
 
-  const logout = () => {
-    setToken('');
-    setIsLoggedIn(false);
-    localStorage.removeItem('token'); // إزالة التوكن عند تسجيل الخروج
-    navigate('/'); // Redirect to home page
-  };
-
   const parseJwt = (token) => {
-    return jwtDecode(token);
+    var base64Url = token.split('.')[1];
+    var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    var jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload);
   };
 
   const handleGoBack = () => {
+    // Reset background color and login state
     document.body.style.backgroundColor = '';
-    navigate('/protected');
+    setIsLoggedIn(false);
+    navigate('/');
   };
 
   return (
     <div className="App">
-      <nav id="nav">
-        <div id="l-n"> 
-          <a href="/">Home</a>
-          <a href="/contact">Contact</a>
-        </div>
-        <div id="r-n">
-          {isLoggedIn ? (
-            <div>
-              <a id="logout" onClick={logout}>Logout</a>
-            </div>
-          ) : (
-            <a href="/register">Register</a>
-          )}
-        </div>
-      </nav>
       <Routes>
         {!isLoggedIn ? (
-          <Route
-            path="/"
-            element={
-              <div>
-                <h1>Welcome</h1>
-              </div>
-            }
-          />
-        ) : null}
-        <Route
-          path="/register"
-          element={
+          <Route path="/" element={
             <div>
-              <h2>Register</h2>
-              <input type="text" placeholder="Username" onChange={(e) => setUsername(e.target.value)} />
-              <input type="password" placeholder="Password" onChange={(e) => setPassword(e.target.value)} />
-              <button onClick={register}>Register</button>
-              <h2>Login</h2>
-              <input type="text" placeholder="Username" onChange={(e) => setUsername(e.target.value)} />
-              <input type="password" placeholder="Password" onChange={(e) => setPassword(e.target.value)} />
-              <button onClick={login}>Login</button>
+              <h1>Welcome</h1>
+              <div>
+                <h2>Register</h2>
+                <input type="text" placeholder="Username" onChange={(e) => setUsername(e.target.value)} />
+                <input type="password" placeholder="Password" onChange={(e) => setPassword(e.target.value)} />
+                <button onClick={register}>Register</button>
+              </div>
+              <div>
+                <h2>Login</h2>
+                <input type="text" placeholder="Username" onChange={(e) => setUsername(e.target.value)} />
+                <input type="password" placeholder="Password" onChange={(e) => setPassword(e.target.value)} />
+                <button onClick={login}>Login</button>
+              </div>
             </div>
-          }
-        />
-        <Route
-          path="/protected"
-          element={<ProtectedSection sayHello={sayHello} goToAdminDashboard={goToAdminDashboard} changeBackground={changeBackground} />}
-        />
+          } />
+        ) : null}
+        <Route path="/protected" element={<ProtectedSection sayHello={sayHello} goToAdminDashboard={goToAdminDashboard} changeBackground={changeBackground} />} />
         <Route path="/admin" element={<AdminDashboard goBack={handleGoBack} />} />
-        <Route path="/contact" element={<div>Contact us</div>} />
       </Routes>
     </div>
   );
 }
 
 const ProtectedSection = ({ sayHello, goToAdminDashboard, changeBackground }) => {
-  const navigate = useNavigate();
-  const token = localStorage.getItem('token');
-  const [isLoggedIn, setIsLoggedIn] = useState(!!token);
-
-  useEffect(() => {
-    if (!token) {
-      navigate('/register'); // إعادة التوجيه إذا لم يكن المستخدم مسجل دخول
-    } else {
-      setIsLoggedIn(true);
-    }
-  }, [token, navigate]);
-
-  return isLoggedIn ? (
+  return (
     <div>
       <h2>Protected Page</h2>
       <button onClick={sayHello}>Say Hello</button>
       <button onClick={goToAdminDashboard}>Admin Dashboard</button>
       <button onClick={changeBackground}>Change Background</button>
     </div>
-  ) : null;
+  );
 };
 
 const AdminDashboard = ({ goBack }) => {
-  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [username, setUsername] = useState('');
   const token = localStorage.getItem('token');
 
   useEffect(() => {
-    if (!token) {
-      navigate('/register'); // إعادة التوجيه إذا لم يكن المستخدم مسجل دخول
-    } else {
-      const fetchUsers = () => {
-        const usersList = JSON.parse(localStorage.getItem('users'));
-        setUsers(usersList);
-      };
-      fetchUsers();
-    }
-  }, [token, navigate]);
+    const fetchUsers = () => {
+      const usersList = JSON.parse(localStorage.getItem('users'));
+      setUsers(usersList);
+    };
+    fetchUsers();
+  }, []);
 
   const authorizeUser = async () => {
     try {
-      const response = await fetch(`${apiUrl}/admin/authorize`, {
+      const response = await fetch(`${apiUrl}/admin/authorize?token=${token}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` // إرسال التوكن في الهيدر
         },
         body: JSON.stringify({ username }),
       });
@@ -234,17 +184,15 @@ const AdminDashboard = ({ goBack }) => {
       <h2>Admin Dashboard</h2>
       <div>
         <h3>Users List</h3>
-        {users.map((user) => (
+        {users.map(user => (
           <div key={user.username}>
             <p>Username: {user.username}, Role: {user.role}, Permissions: {user.permissions.join(', ')}</p>
           </div>
         ))}
         <select onChange={(e) => setUsername(e.target.value)}>
           <option value="">Select a user</option>
-          {users.map((user) => (
-            <option key={user.username} value={user.username}>
-              {user.username}
-            </option>
+          {users.map(user => (
+            <option key={user.username} value={user.username}>{user.username}</option>
           ))}
         </select>
         <button onClick={authorizeUser}>Authorize User</button>
@@ -254,4 +202,4 @@ const AdminDashboard = ({ goBack }) => {
   );
 };
 
-export default App;
+export default SignIn;
